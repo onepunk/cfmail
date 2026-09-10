@@ -1188,3 +1188,11 @@ input, select { min-height: 34px; }
   .raw-link, .html-toggle { margin-left: 16px; }
   .composer { border-radius: 0; }
 }
+
+.translation-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 16px; padding: 12px; border: 1px solid #c6d9ef; border-radius: 4px; background: #f1f7ff; color: #234d78; }
+.translation-bar > span { display: grid; gap: 4px; flex: 1; min-width: 160px; }
+.translation-bar strong { font-size: 12px; }
+.translation-bar small, .translation-bar p { font-size: 11px; }
+.translation-bar p { flex-basis: 100%; margin: 0; }
+.translation-bar [role="alert"] { color: #a12622; }
+.translated-message h2 { margin: 16px 16px 0; font-size: 16px; }

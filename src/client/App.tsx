@@ -1,3 +1,4 @@
+import { MessageTranslation } from "./MessageTranslation";
 import { EMAIL_VIEWER_SANDBOX } from "../shared/emailViewer";
 import {
   Archive,
@@ -910,8 +911,10 @@ function Reader(props: {
                 <ChevronDown size={16} className="detail-chevron" />
               </summary>
               <div className="recipient-line">To {item.to.map((address) => address.email).join(", ") || "undisclosed recipients"}</div>
-              {item.hasHtmlBody ? <button className="text-button html-toggle" onClick={() => setShowHtml((current) => ({ ...current, [item.id]: !(current[item.id] ?? true) }))}>{(showHtml[item.id] ?? true) ? "Show plain text" : "Show formatted version"}</button> : null}
-              {item.hasHtmlBody && (showHtml[item.id] ?? true) ? <FormattedMessage message={item} /> : <pre className="message-body">{item.textBody || "This message did not contain a readable plain-text body."}</pre>}
+              <MessageTranslation key={item.id} subject={item.subject} body={item.textBody}>
+                {item.hasHtmlBody ? <button className="text-button html-toggle" onClick={() => setShowHtml((current) => ({ ...current, [item.id]: !(current[item.id] ?? true) }))}>{(showHtml[item.id] ?? true) ? "Show plain text" : "Show formatted version"}</button> : null}
+                {item.hasHtmlBody && (showHtml[item.id] ?? true) ? <FormattedMessage message={item} /> : <pre className="message-body">{item.textBody || "This message did not contain a readable plain-text body."}</pre>}
+              </MessageTranslation>
               {item.attachments.length ? (
                 <div className="attachments" aria-label="Attachments">
                   {item.attachments.map((attachment) => (
