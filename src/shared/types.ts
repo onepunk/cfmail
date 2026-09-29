@@ -35,6 +35,9 @@ export interface IdentityRecord {
   signatureHtml: string;
 }
 
+/** What happened to the address's Cloudflare Email Routing rule when an identity was added. */
+export type IdentityRouting = "created" | "existing" | "not_configured" | "inbound_disabled";
+
 export interface MessageSummary {
   id: string;
   threadId: string;

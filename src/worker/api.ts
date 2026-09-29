@@ -13,6 +13,7 @@ import type {
   DomainRecord,
   DraftRecord,
   IdentityRecord,
+  IdentityRouting,
   LabelRecord,
   MailAddress,
   MessageDetail,
@@ -25,6 +26,7 @@ import { isSpreadsheetAttachment } from "../shared/spreadsheetAttachments";
 import { prepareEmailHtml, proxyableRemoteImageUrls, safeRemoteImageUrl } from "./emailHtml";
 import { isDocumentAttachment } from "../shared/documentAttachments";
 import { auditStatement, writeAudit } from "./audit";
+import { CloudflareApiError, RoutingConflictError, createRoutingClient } from "./routing";
 import { accessLoginUrl, authenticateAccessRequest, type AccessIdentity } from "./auth";
 import type { MailJob } from "./jobs";
 import {
@@ -862,13 +864,45 @@ api.post("/api/identities", async (context) => {
     }),
   );
   if (!input.ok) return context.json({ error: input.error }, 400);
-  const domain = await context.env.DB.prepare("SELECT name FROM domains WHERE id = ?")
+  const domain = await context.env.DB.prepare("SELECT name, inbound_enabled, zone_id FROM domains WHERE id = ?")
     .bind(input.data.domainId)
-    .first<{ name: string }>();
+    .first<{ name: string; inbound_enabled: number; zone_id: string | null }>();
   if (!domain) return context.json({ error: "Domain not found" }, 404);
   if (domainFromAddress(input.data.email) !== domain.name) {
     return context.json({ error: "The identity must use the selected domain" }, 400);
   }
+  const duplicate = await context.env.DB.prepare("SELECT id FROM identities WHERE email = ?")
+    .bind(input.data.email)
+    .first<{ id: string }>();
+  if (duplicate) return context.json({ error: "That email identity is already configured" }, 409);
+
+  let routing: IdentityRouting = "not_configured";
+  let createdRule: { zoneId: string; ruleId: string } | null = null;
+  const routingClient = context.env.CF_API_TOKEN ? createRoutingClient({ apiToken: context.env.CF_API_TOKEN }) : null;
+  if (!domain.inbound_enabled) {
+    routing = "inbound_disabled";
+  } else if (routingClient) {
+    try {
+      const route = await routingClient.ensureWorkerRoute({
+        domain: domain.name,
+        address: input.data.email,
+        workerName: context.env.CFMAIL_WORKER_NAME || "cfmail",
+        zoneId: domain.zone_id,
+      });
+      routing = route.status;
+      if (route.status === "created") createdRule = { zoneId: route.zoneId, ruleId: route.ruleId };
+      if (route.zoneId !== domain.zone_id) {
+        await context.env.DB.prepare("UPDATE domains SET zone_id = ? WHERE id = ?").bind(route.zoneId, input.data.domainId).run();
+      }
+    } catch (caught) {
+      if (caught instanceof RoutingConflictError) return context.json({ error: caught.message }, 409);
+      if (caught instanceof CloudflareApiError) {
+        return context.json({ error: `Could not create the Email Routing rule. ${caught.message}` }, 502);
+      }
+      throw caught;
+    }
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
@@ -887,13 +921,16 @@ api.post("/api/identities", async (context) => {
       action: "identity.created",
       targetType: "identity",
       targetId: id,
-      detail: { email: input.data.email },
+      detail: { email: input.data.email, routing },
     }, now),
   );
   try {
     await context.env.DB.batch(statements);
-    return context.json({ id }, 201);
+    return context.json({ id, routing }, 201);
   } catch {
+    if (createdRule && routingClient) {
+      await routingClient.deleteRule(createdRule.zoneId, createdRule.ruleId).catch(() => undefined);
+    }
     return context.json({ error: "That email identity is already configured" }, 409);
   }
 });

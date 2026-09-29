@@ -11,6 +11,7 @@ import type {
   DomainRecord,
   DraftRecord,
   IdentityRecord,
+  IdentityRouting,
   LabelRecord,
   MailFilters,
   MailboxBootstrap,
@@ -147,7 +148,7 @@ export const mailApi = {
   addDomain: (data: { name: string; label: string; inboundEnabled: boolean; outboundEnabled: boolean }) =>
     request<{ id: string }>("/api/domains", { method: "POST", json: data }),
   addIdentity: (data: { domainId: string; email: string; displayName: string; isDefault: boolean; signatureText: string; signatureHtml: string }) =>
-    request<{ id: string }>("/api/identities", { method: "POST", json: data }),
+    request<{ id: string; routing: IdentityRouting }>("/api/identities", { method: "POST", json: data }),
   updateIdentity: (id: string, data: { displayName: string; isDefault: boolean; signatureText: string; signatureHtml: string }) =>
     request<{ ok: boolean }>(`/api/identities/${id}`, { method: "PATCH", json: data }),
   domainHealth: (id: string) => request<{ health: DomainRecord["health"] }>(`/api/domains/${id}/health`, { method: "POST", json: {} }),

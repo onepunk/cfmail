@@ -1220,6 +1220,7 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
   const [adding, setAdding] = useState<"domain" | "identity" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [warning, setWarning] = useState("");
   const [storage, setStorage] = useState<Record<string, { messages: number; rawBytes: number; attachmentBytes: number }>>({});
   const [audit, setAudit] = useState<Array<{ id: string; action: string; actorEmail: string; createdAt: string }>>([]);
   const [delivery, setDelivery] = useState<Array<{ domainId: string; status: string; count: number }>>([]);
@@ -1238,7 +1239,7 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setError(""); setSuccess("");
+    setError(""); setSuccess(""); setWarning("");
     try {
       await mailApi.addDomain({
         name: String(data.get("name")),
@@ -1257,9 +1258,9 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setError(""); setSuccess("");
+    setError(""); setSuccess(""); setWarning("");
     try {
-      await mailApi.addIdentity({
+      const { routing } = await mailApi.addIdentity({
         domainId: String(data.get("domainId")),
         email: String(data.get("email")),
         displayName: String(data.get("displayName")),
@@ -1270,7 +1271,10 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
       form.reset();
       await onChanged();
       setAdding(null);
-      setSuccess("Sending identity added.");
+      if (routing === "created") setSuccess("Identity added and its Email Routing rule was created in Cloudflare.");
+      else if (routing === "existing") setSuccess("Identity added. Cloudflare already routes this address to cfmail.");
+      else if (routing === "inbound_disabled") setSuccess("Identity added for sending only. Inbound mail is disabled for this domain.");
+      else setWarning("Identity added, but no Email Routing rule was created because CF_API_TOKEN is not set. Add a Cloudflare routing rule that sends this address to the cfmail Worker, or mail to it will not arrive.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not add identity"); }
   }
 
@@ -1297,6 +1301,7 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
         <div className="settings-content">
           {error ? <p className="settings-notice error" role="alert">{error}</p> : null}
           {success ? <p className="settings-notice success" role="status">{success}</p> : null}
+          {warning ? <p className="settings-notice warning" role="status">{warning}</p> : null}
 
           {section === "domains" ? (
             <section aria-labelledby="configured-domains">
@@ -1304,7 +1309,7 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
               {adding === "domain" ? <div className="settings-editor-panel"><h3>Add a domain</h3><form onSubmit={addDomain} className="settings-form settings-form-columns"><label>Domain name<input name="name" type="text" placeholder="example.com" required /></label><label>Display name<input name="label" type="text" placeholder="Example" required /></label><label className="check-row"><input type="checkbox" name="inbound" /><span><strong>Receiving configured</strong>Email Routing points to this Worker.</span></label><label className="check-row"><input type="checkbox" name="outbound" /><span><strong>Sending configured</strong>Email Sending is authenticated.</span></label><div className="settings-form-actions"><button className="button primary">Add domain</button><button type="button" className="button quiet" onClick={() => setAdding(null)}>Cancel</button></div></form><div className="infra-note"><ShieldCheck size={17} /><p><strong>DNS stays under your control.</strong>Adding a domain here does not change DNS. Complete the repository onboarding steps before enabling mail flow.</p></div></div> : null}
               <div className="settings-list domain-settings-list" role="list">
                 <div className="settings-list-heading" aria-hidden="true"><span>Domain</span><span>Status</span><span>Storage</span><span>Actions</span></div>
-                {bootstrap?.domains.map((domain) => <article className="settings-list-row domain-settings-row" key={domain.id}><div className="settings-primary"><span className="domain-monogram">{domain.label.slice(0, 1).toUpperCase()}</span><span><strong>{domain.label}</strong><small>{domain.name}</small></span></div><div className="domain-statuses"><StatusPill ready={domain.inboundEnabled} label="Receive" /><StatusPill ready={domain.outboundEnabled} label="Send" /><StatusPill ready={[domain.health.spf, domain.health.dkim, domain.health.dmarc].every((value) => value === "healthy")} label="DNS" /></div><small className="storage-summary">{storage[domain.id] ? `${storage[domain.id].messages} messages · ${formatBytes(storage[domain.id].rawBytes + storage[domain.id].attachmentBytes)}` : "Calculating…"}</small><button className="button quiet compact-button" onClick={async () => { setError(""); setSuccess(""); try { await mailApi.domainHealth(domain.id); await onChanged(); setSuccess(`${domain.name} DNS health refreshed.`); } catch (caught) { setError(caught instanceof Error ? caught.message : "Health check failed"); } }}><RefreshCw size={14} /> Check DNS</button></article>)}
+                {bootstrap?.domains.map((domain) => <article className="settings-list-row domain-settings-row" key={domain.id}><div className="settings-primary"><span className="domain-monogram">{domain.label.slice(0, 1).toUpperCase()}</span><span><strong>{domain.label}</strong><small>{domain.name}</small></span></div><div className="domain-statuses"><StatusPill ready={domain.inboundEnabled} label="Receive" /><StatusPill ready={domain.outboundEnabled} label="Send" /><StatusPill ready={[domain.health.spf, domain.health.dkim, domain.health.dmarc].every((value) => value === "healthy")} label="DNS" /></div><small className="storage-summary">{storage[domain.id] ? `${storage[domain.id].messages} messages · ${formatBytes(storage[domain.id].rawBytes + storage[domain.id].attachmentBytes)}` : "Calculating…"}</small><button className="button quiet compact-button" onClick={async () => { setError(""); setSuccess(""); setWarning(""); try { await mailApi.domainHealth(domain.id); await onChanged(); setSuccess(`${domain.name} DNS health refreshed.`); } catch (caught) { setError(caught instanceof Error ? caught.message : "Health check failed"); } }}><RefreshCw size={14} /> Check DNS</button></article>)}
                 {!bootstrap?.domains.length ? <EmptyState icon={AtSign} title="No domains yet" copy="Add the first domain to begin." /> : null}
               </div>
             </section>
@@ -1325,7 +1330,7 @@ function DomainSettings({ bootstrap, onChanged }: { bootstrap: MailboxBootstrap 
           ) : null}
 
           {section === "mailbox" ? (
-            <section aria-labelledby="mailbox-settings-heading"><header className="settings-section-header"><div><h2 id="mailbox-settings-heading">Mailbox</h2><p>Delivery safeguards, retention, backups, and message labels.</p></div></header><div className="settings-group"><h3>Retention and backups</h3><form className="retention-form" onSubmit={async (event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setError(""); setSuccess(""); try { await mailApi.updateSettings({ undoSendSeconds: Number(data.get("undo")), trashRetentionDays: Number(data.get("trash")), backupRetentionDays: Number(data.get("backup")) }); await onChanged(); setSuccess("Mailbox retention settings updated."); } catch (caught) { setError(caught instanceof Error ? caught.message : "Settings could not be updated"); } }}><label>Undo send (seconds)<input name="undo" type="number" min="0" max="60" defaultValue={bootstrap?.settings.undoSendSeconds} /></label><label>Trash retention (days)<input name="trash" type="number" min="1" max="3650" defaultValue={bootstrap?.settings.trashRetentionDays} /></label><label>Backup retention (days)<input name="backup" type="number" min="7" max="3650" defaultValue={bootstrap?.settings.backupRetentionDays} /></label><button className="button primary"><Save size={15} /> Save changes</button></form><p className="settings-help">Daily logical D1 backups are written to R2 and expired automatically.</p></div><div className="settings-group"><h3>Labels</h3><div className="label-list">{bootstrap?.labels.map((label) => <span key={label.id}><i style={{ background: label.color }} />{label.name}</span>)}</div><form className="label-form" onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); try { await mailApi.addLabel(String(data.get("name")), String(data.get("color"))); form.reset(); await onChanged(); setSuccess("Label added."); } catch (caught) { setError(caught instanceof Error ? caught.message : "Label could not be added"); } }}><input name="name" placeholder="New label" required /><input name="color" type="color" defaultValue="#64748b" aria-label="Label colour" /><button className="button quiet">Add label</button></form></div></section>
+            <section aria-labelledby="mailbox-settings-heading"><header className="settings-section-header"><div><h2 id="mailbox-settings-heading">Mailbox</h2><p>Delivery safeguards, retention, backups, and message labels.</p></div></header><div className="settings-group"><h3>Retention and backups</h3><form className="retention-form" onSubmit={async (event) => { event.preventDefault(); const data = new FormData(event.currentTarget); setError(""); setSuccess(""); setWarning(""); try { await mailApi.updateSettings({ undoSendSeconds: Number(data.get("undo")), trashRetentionDays: Number(data.get("trash")), backupRetentionDays: Number(data.get("backup")) }); await onChanged(); setSuccess("Mailbox retention settings updated."); } catch (caught) { setError(caught instanceof Error ? caught.message : "Settings could not be updated"); } }}><label>Undo send (seconds)<input name="undo" type="number" min="0" max="60" defaultValue={bootstrap?.settings.undoSendSeconds} /></label><label>Trash retention (days)<input name="trash" type="number" min="1" max="3650" defaultValue={bootstrap?.settings.trashRetentionDays} /></label><label>Backup retention (days)<input name="backup" type="number" min="7" max="3650" defaultValue={bootstrap?.settings.backupRetentionDays} /></label><button className="button primary"><Save size={15} /> Save changes</button></form><p className="settings-help">Daily logical D1 backups are written to R2 and expired automatically.</p></div><div className="settings-group"><h3>Labels</h3><div className="label-list">{bootstrap?.labels.map((label) => <span key={label.id}><i style={{ background: label.color }} />{label.name}</span>)}</div><form className="label-form" onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); try { await mailApi.addLabel(String(data.get("name")), String(data.get("color"))); form.reset(); await onChanged(); setSuccess("Label added."); } catch (caught) { setError(caught instanceof Error ? caught.message : "Label could not be added"); } }}><input name="name" placeholder="New label" required /><input name="color" type="color" defaultValue="#64748b" aria-label="Label colour" /><button className="button quiet">Add label</button></form></div></section>
           ) : null}
 
           {section === "activity" ? (

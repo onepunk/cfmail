@@ -98,6 +98,14 @@ npm run domain:add -- \
 Review the output before adding `--apply`. If Email Routing is not enabled, the helper also requires `--replace-mx` before it will change MX records.
 If you changed the Worker name from `cfmail`, also pass `--worker your-worker-name`.
 
+Addresses added later from **Settings → Sending identities** can create their own routing rules. Create a Cloudflare API token with **Zone → Zone → Read** and **Zone → Email Routing Rules → Edit**, limited to your mail domains, and store it as a Worker secret:
+
+```bash
+npx wrangler secret put CF_API_TOKEN
+```
+
+With the token set, adding an identity creates a literal Email Routing rule that sends the address to the Worker. If a rule for that address already sends mail somewhere else, cfmail refuses to add the identity rather than overwrite the rule. Without the token, the identity is still saved, and the settings page warns you to add the routing rule yourself. If you renamed the Worker, set the `CFMAIL_WORKER_NAME` variable to its name. The token does not enable Email Routing or change MX records; use `npm run domain:add` for a new domain.
+
 ## Local development
 
 Apply the migrations to a local D1 database, then start the Worker:
