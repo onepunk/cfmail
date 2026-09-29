@@ -1021,6 +1021,7 @@ input, select { min-height: 34px; }
 .settings-notice { width: min(100%, 1040px); margin: 0 0 16px; padding: 9px 12px; border-left: 3px solid; font-size: 12px; }
 .settings-notice.error { border-color: var(--danger); color: #8e0712; background: var(--danger-soft); }
 .settings-notice.success { border-color: var(--success); color: #0b5a0b; background: var(--success-soft); }
+.settings-notice.warning { border-color: var(--warning); color: #713f12; background: var(--warning-soft); }
 .settings-editor-panel { margin: 0 0 24px; padding: 20px; border: 1px solid var(--border); background: #fafafa; }
 .settings-editor-panel h3 { margin: 0 0 18px; font-size: 15px; }
 .settings-form { margin-top: 0; }
