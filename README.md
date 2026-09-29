@@ -78,6 +78,8 @@ npm run db:migrate:remote
 npm run deploy
 ```
 
+`npm run deploy` first checks that your local `wrangler.jsonc` declares every queue, cron, variable and compatibility flag in `wrangler.example.jsonc`, and that `workers_dev` is off. A stale local copy would otherwise deploy a Worker that stores incoming mail but never processes it.
+
 Enable Email Sending for each domain you will send from:
 
 ```bash

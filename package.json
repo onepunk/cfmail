@@ -9,7 +9,7 @@
     "build": "vite build",
     "check": "tsc --noEmit",
     "dev": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "node scripts/check-config.mjs && npm run build && wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
